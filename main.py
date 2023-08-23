@@ -1,84 +1,148 @@
-#!/usr/bin/env python
-# pylint: disable=unused-argument, wrong-import-position
-# This program is dedicated to the public domain under the CC0 license.
+#Запусти pipenv shell   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+from dotenv import load_dotenv
 
-"""
-Simple Bot to reply to Telegram messages.
+import os
+import telebot
+from pyowm.owm import OWM
+from pyowm.utils.config import get_default_config
+import webbrowser
+from telebot import types
+load_dotenv()
+bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+omw_token = os.environ.get('OPEN_WEATHER_MAP_TOKEN')
+bot = telebot.TeleBot(bot_token)
+config_dict = get_default_config()
+config_dict['language'] = 'ru'
+owm = OWM(omw_token, config_dict)
+mgr = owm.weather_manager()
 
-First, a few handler functions are defined. Then, those functions are passed to
-the Application and registered at their respective places.
-Then, the bot is started and runs until we press Ctrl-C on the command line.
-
-Usage:
-Basic Echobot example, repeats messages.
-Press Ctrl-C on the command line or send a signal to the process to stop the
-bot.
-"""
-
-import logging
-
-from telegram import __version__ as TG_VER
-
-try:
-    from telegram import __version_info__
-except ImportError:
-    __version_info__ = (0, 0, 0, 0, 0)  # type: ignore[assignment]
-
-if __version_info__ < (20, 0, 0, "alpha", 1):
-    raise RuntimeError(
-        f"This example is not compatible with your current PTB version {TG_VER}. To view the "
-        f"{TG_VER} version of this example, "
-        f"visit https://docs.python-telegram-bot.org/en/v{TG_VER}/examples.html"
-    )
-from telegram import ForceReply, Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-# set higher logging level for httpx to avoid all GET and POST requests being logged
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
-logger = logging.getLogger(__name__)
+@bot.message_handler(commands=['web', 'site', 'website', 'weathersite'])
+def site(message):
+    splited_message = message.text
+    splited_message = splited_message.split(" ")
+    splited_message = splited_message[1:]
+    city = " ".join (splited_message)
+    print (city)
+    observation = mgr.weather_at_place(city)
+    weather = observation.weather
+    temp = weather.temperature('celsius')['temp']
+    status = weather.detailed_status
+    
+    bot.send_message(message.chat.id, f'В городе {city} сейчас: {status}, {temp}')
 
 
-# Define a few command handlers. These usually take the two arguments update and
-# context.
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /start is issued."""
-    user = update.effective_user
-    await update.message.reply_html(
-        rf"Hi {user.mention_html()}!",
-        reply_markup=ForceReply(selective=True),
-    )
+#Ответ на команду /info
+@bot.message_handler(commands=['info'])
+def info(message):
+    bot.send_message(message.chat.id, message)
+#Ответ на команду /start
+#@bot.message_handler(commands=['start'])
+#def start(message):
+#    bot.send_message(message.chat.id, f'Приветсвую, {message.from_user.first_name}! Чем могу быть полезен?')
+
+#Ответ с ссылкой на фото
+@bot.message_handler(content_types=['photo'])
+def get_photo(message):
+     bot.reply_to(message, 'nice photo')
+
+#Ответ с ссылкой на видео
+@bot.message_handler(content_types=['video'])
+def get_video(message):
+    bot.reply_to(message, 'nice video')
 
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send a message when the command /help is issued."""
-    await update.message.reply_text("Help!")
+
+def on_click(message):
+    if message.text == 'Перейти на сайт':
+        bot.send_message(message.chat.id, 'web is open')
+    elif message.text == 'Удалить аудио' :
+        bot.send_message(message.chat.id, 'deleted')
+
+#Ответ с отсылкой на аудио(не на гс)
+@bot.message_handler(content_types=['audio'])
+def get_audio(message):
+
+    markup = types.InlineKeyboardMarkup()
+    
+    btn1 = types.InlineKeyboardButton('перейти на сайт', url='https://gismeteo.ru')
+    markup.row(btn1)
+    btn2 = types.InlineKeyboardButton('удалить аудио', callback_data='delete')
+    
+    btn3 = types.InlineKeyboardButton('редактировать текст', callback_data='edit')
+    markup.row(btn2, btn3)
+    
+    bot.reply_to(message, 'nice audio', reply_markup=markup)
+
+#Функционал кнопок 2 и 3
+@bot.callback_query_handler(func=lambda callback: True)
+def callback_message(callback):
+    if callback.data == 'delete':
+        bot.delete_message(callback.message.chat.id, callback.message.message_id - 1)
+    elif callback.data == 'edit':
+        bot.edit_message_text('Edit text', callback.message.chat.id, callback.message.message_id)
+
+@bot.message_handler(commands=['start'])
+def start(message):
+     #добавление кнопок по парядку по одной в ряд
+     #markup.add(types.ReplyKeyboardButton('Перейти на сайт'))
+
+    markup = types.InlineKeyboardMarkup()
+
+    btn5 = types.KeyboardButton('Перейти на сайт')
+    btn6 = types.KeyboardButton('Удалить аудио')
+    markup.row(btn5, btn6)
+    btn7 = types.KeyboardButton('Редактировать текст')
+    markup.row(btn7)
 
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Echo the user message."""
-    await update.message.reply_text(update.message.text)
 
 
-def main() -> None:
-    """Start the bot."""
-    # Create the Application and pass it your bot's token.
-    application = Application.builder().token("TOKEN").build()
-
-    # on different commands - answer in Telegram
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-
-    # on non command i.e message - echo the message on Telegram
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
-
-    # Run the bot until the user presses Ctrl-C
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
-if __name__ == "__main__":
-    main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@bot.message_handler()
+def main(message):
+    if message.text.lower() =='id':
+        bot.reply_to(message, f'ID: {message.from_user.id}')
+    elif message.text.lower() == 'айди':
+        bot.reply_to(message, f'ID: {message.from_user.id}')
+
+bot.polling(none_stop=True)
