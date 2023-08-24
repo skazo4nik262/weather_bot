@@ -26,7 +26,21 @@ mgr = owm.weather_manager()
 #Ответ на команду /start
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, f'Приветсвую, {message.from_user.first_name}! Чем могу быть полезен?')
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn1 = types.KeyboardButton("Изменить город")
+    btn2 = types.KeyboardButton("Узнать погоду")
+    markup.add(btn1, btn2)
+    bot.send_message(message.chat.id, f'Приветсвую, {message.from_user.first_name}! Чем могу быть полезен?', reply_markup=markup)
+
+#Функционал кнопок
+@bot.message_handler(content_types=['text'])
+def callback_message(message):
+    if message.text == 'Изменить город':
+         get_saved_data(message)
+    elif message.text == 'Узнать погоду':
+            site(message)
+    
+
 
 #Ответ на команду /web
 @bot.message_handler(commands=['web', 'site', 'website', 'weathersite'])
@@ -65,18 +79,17 @@ def site(message):
 #Ответ на команду /weather с использование города из json
 @bot.message_handler(commands = ['weather']) 
 def get_saved_data(message):
-    global user_data
-    user_id = message.from_user.id
-    
+    with open('user_data.json', 'r') as file:
+        user_data = json.load(file)
+    user_id = str(message.from_user.id)    
 
 #Использование данных из json
     if user_id in user_data:
-        saved_data = user_data[user_id]
-        print(saved_data)
+        city = user_data[user_id]
+        bot.reply_to(message, f'Ваш город: {city}')
+    else:
+         bot.reply_to(message, 'Вы не указали  город')
 
-    with open('user_data.json', 'r') as file:
-        user_data = json.load(file)
-        bot.reply_to(message, 'Ваш город', {saved_data})
 
 
 
