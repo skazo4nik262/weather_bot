@@ -23,6 +23,8 @@ config_dict['language'] = 'ru'
 owm = OWM(omw_token, config_dict)
 mgr = owm.weather_manager()
 
+
+
 #Ответ на команду /start
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -30,75 +32,73 @@ def start(message):
     btn1 = types.KeyboardButton("Изменить город")
     btn2 = types.KeyboardButton("Узнать погоду")
     markup.add(btn1, btn2)
-    bot.send_message(message.chat.id, f'Приветсвую, {message.from_user.first_name}! Чем могу быть полезен?', reply_markup=markup)
+    bot.send_message(message.chat.id, f'Приветсвую, {message.from_user.first_name}! Чтобы узнать погоду в городе, просто напишите название города. Если вы хотите сохранить свой город, чтобы постоянно не вводить его название, то нажмите на конпку "Изменить город" для полуения большей информации', reply_markup=markup)
 
-#Функционал кнопок
-@bot.message_handler(content_types=['text'])
-def callback_message(message):
-    if message.text == 'Изменить город':
-         get_saved_data(message)
-    elif message.text == 'Узнать погоду':
-            site(message)
+
+
+@bot.message_handler(commands=['save'])
+def split(message):
+     #Привидение сообщения в список, выявление названия города
+    try:
+        splited_message = message.text
+        splited_message = splited_message.split(" ")
+        splited_message = splited_message[1:]
+        city = " ".join (splited_message)
+        print(city)
+    except Exception as e:
+        bot.reply_to(message, "Вы не указали город")
+    
+    #Получение айди пользователя и его последнего сообщения
+    user_id = message.from_user.id
+    user_data[user_id] = city
+    
+    #Запись города в json
+    with open('user_data.json', 'w') as file:
+         json.dump(user_data, file)
+    print(f"Ваш город: {city} сохранён")
+    bot.reply_to(message, f"Ваш город: {city} сохранён")
     
 
 
-#Ответ на команду /web
-@bot.message_handler(commands=['web', 'site', 'website', 'weathersite'])
-def site(message):
-    global user_data
-#Привидение сообщения в список, выявление названия города
-    splited_message = message.text.split(" ")
-    city = " ".join (splited_message[1:])
-
-#Проверка пустой строки
+@bot.message_handler(commands=['weather'])
+def weather(message):
+    with open('user_data.json', 'r') as file:
+        user_data = json.load(file)
+    user_id = str(message.from_user.id)
+    if user_id in user_data:
+        city = user_data[user_id]
+        print(f'Ваш город: {city}')
     try:
-            print (city)
             observation = mgr.weather_at_place(city)
             weather = observation.weather
             temp = weather.temperature('celsius')['temp']
             status = weather.detailed_status
             bot.send_message(message.chat.id, f'В городе {city} сейчас: {status}, {temp}')
     except Exception as e:
-            bot.send_message(message.chat.id, f'Укажите город в котором хотите посмотреть погоду')    
+            bot.send_message(message.chat.id, 'К сожалению вашего города нет в нашей базе')
 
-          
-    else:
 
+
+@bot.message_handler(content_types=['text'])
+def weather2(message):
+    city = message.text
+    try:
+            observation = mgr.weather_at_place(city)
+            weather = observation.weather
+            temp = weather.temperature('celsius')['temp']
+            status = weather.detailed_status
+            bot.send_message(message.chat.id, f'В городе {city} сейчас: {status}, {temp}')
+    except Exception as e:
+            bot.send_message(message.chat.id, 'К сожалению вашего города нет в нашей базе')
+
+
+#Функционал кнопок
+@bot.message_handler(content_types=['text'])
+def button(message):
+    if message.text == 'Изменить город':
+        bot.send_message(message.chat.id, "Чтобы сохранить город напишите: /save 'Название города'(без кавычек)")
+    elif message.text == 'Узнать погоду':
+        weather(message)
     
-        bot.reply_to(message, "Ваш город сохранён")
 
-#Получение айди пользователя и его последнего сообщения
-    user_id = message.from_user.id
-    user_data[user_id] = city
-
-#Запись города в json          
-    with open('user_data.json', 'w') as file:
-         json.dump(user_data, file)
-    
-
-#Ответ на команду /weather с использование города из json
-@bot.message_handler(commands = ['weather']) 
-def get_saved_data(message):
-    with open('user_data.json', 'r') as file:
-        user_data = json.load(file)
-    user_id = str(message.from_user.id)    
-
-#Использование данных из json
-    if user_id in user_data:
-        city = user_data[user_id]
-        bot.reply_to(message, f'Ваш город: {city}')
-    else:
-         bot.reply_to(message, 'Вы не указали  город')
-
-
-
-
-
-
-
-
-
-
-
-#Всегда запущен
 bot.polling(none_stop=True)
